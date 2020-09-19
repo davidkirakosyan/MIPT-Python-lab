@@ -55,7 +55,7 @@ def move(steps_of_time_number, pool, velocity):
             unit.goto(x + vx, y + vy)
 
 
-number_of_molecs = 6
+number_of_molecs = 20
 steps_of_time_number = 500
 v_max = 5
 x_max, y_max = 200, 200

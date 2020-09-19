@@ -1,9 +1,10 @@
 import turtle
+
 # reading movements from DIGITS.txt
 with open('DIGITS.txt') as file:
     DIGITS = []
-    for line in file.readlines()[1:]: # pass comment
-        line = line[:-1] # remove \n
+    for line in file.readlines()[1:]:  # pass comment
+        line = line[:-1]  # remove \n
         line = line.split(', ')
         DIGITS.append(tuple(tuple(map(int, step.split())) for step in line))
 
@@ -13,7 +14,7 @@ def write_digit(x_init=0, y_init=0, step=30):
     for j, (x, y, angle) in enumerate(DIGITS[i]):
         if j == 1:
             turtle.down()
-        turtle.goto(x_init + x*step, y_init + y * step)
+        turtle.goto(x_init + x * step, y_init + y * step)
         turtle.left(angle)
     turtle.up()
     turtle.setheading(0)
