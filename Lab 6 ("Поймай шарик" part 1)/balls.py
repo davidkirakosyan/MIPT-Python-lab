@@ -14,7 +14,7 @@ COLORS = {
     'BLACK': 0x0,
 }
 balls = []
-
+rects = []
 
 def main():
     """
@@ -29,7 +29,7 @@ def main():
 
     score = 0
 
-    ball_number = 10
+    ball_number = 3
     v_max = 20
     radius = 60
     for i in range(ball_number):
@@ -42,13 +42,24 @@ def main():
             'vy': int(v_max * sin(angle)),
             'color': random.choice(list(COLORS.values())[:-1]),  # removing BLACK color
         })
+    rect_number = 2
+    for i in range(rect_number):
+        angle = 2 * pi * random.random()
+        rects.append({
+            'x': random.randint(100, s_size[0] - 100),
+            'y': random.randint(100, s_size[1] - 100),
+            'r': radius * 2 // 3,
+            'vx': int(v_max * cos(angle)),
+            'vy': int(v_max * sin(angle)),
+            'color': random.choice(list(COLORS.values())[:-1]),  # removing BLACK color
+        })
 
     pygame.display.update()
     clock = pygame.time.Clock()
     finished = False
 
     # timer init conditions
-    is_showing_balls = True
+    is_showing = True
     start_time = pygame.time.get_ticks()
     show_screen_t = 2  # 2 seconds
     hide_screen_t = 5
@@ -62,35 +73,36 @@ def main():
             elif event.type == pygame.MOUSEBUTTONDOWN:
                 score += count_score(event, balls, v_max, s_size)
 
-        start_time, lap, is_showing_balls = timer(
+        start_time, lap, is_showing = timer(
             pygame.time.get_ticks(),
             start_time,
             lap,
             show_screen_t,
             hide_screen_t,
-            is_showing_balls,
+            is_showing,
         )
 
         screen.fill(COLORS['BLACK'])
         show_score(screen, score)
-        move_balls(balls, *s_size, radius)
-        if is_showing_balls:
+        move_elements(balls + rects, *s_size, radius)
+        if is_showing:
             show_balls(screen, balls)
+            show_rects(screen, rects)
 
         pygame.display.update()
     pygame.quit()
 
 
-def move_balls(balls, w, h, bounce_lim):
+def move_elements(elems, w, h, bounce_lim):
     """
-    Change balls coordinates and checks whether they should bounce the wall.
+    Change elements' coordinates and check whether they should bounce the wall.
 
-    :param balls: list of dictionaries with ball parameters
+    :param elems: list of dictionaries with elements' parameters
     :param w: width of window
     :param h: height of window
     :return: None
     """
-    for item in balls:
+    for item in elems:
         if item['x'] < bounce_lim or w - item['x'] < bounce_lim:
             item['vx'] *= -1
         if item['y'] < bounce_lim or h - item['y'] < bounce_lim:
@@ -109,6 +121,20 @@ def show_balls(surface, balls):
     """
     for item in balls:
         circle(surface, item['color'], (item['x'], item['y']), item['r'])
+
+
+def show_rects(surface, rects):
+    """
+    Draws balls on `surface` object.
+
+    :param surface: pygame Surface object
+    :param rects: list of dictionaries with balls' data.
+    :return: None
+    """
+    for item in rects:
+        x = item['x'] - item['r'] // 2
+        y = item['y'] - item['r'] // 2
+        rect(surface, item['color'], (x, y, item['r'], item['r']))
 
 
 def count_score(event, balls, v_max, screen_size):
@@ -170,9 +196,6 @@ def timer(curr_time, str_time, lap, show_t, hide_t, is_showing):
         else:
             lap = show_t
     return str_time, lap, is_showing
-
-
-
 
 
 if __name__ == '__main__':
