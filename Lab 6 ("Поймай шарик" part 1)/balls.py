@@ -16,6 +16,7 @@ COLORS = {
 balls = []
 rects = []
 
+
 def main():
     """
     Initializes pygame Surface, defines event handling loop.
@@ -30,29 +31,23 @@ def main():
     score = 0
 
     ball_number = 3
-    v_max = 20
+    v_max = 15
     radius = 60
-    for i in range(ball_number):
-        angle = 2 * pi * random.random()
-        balls.append({
-            'x': random.randint(100, s_size[0] - 100),
-            'y': random.randint(100, s_size[1] - 100),
-            'r': radius,
-            'vx': int(v_max * cos(angle)),
-            'vy': int(v_max * sin(angle)),
-            'color': random.choice(list(COLORS.values())[:-1]),  # removing BLACK color
-        })
+    balls.extend(coord_calc(
+        ball_number,
+        s_size[0],
+        s_size[1],
+        radius,
+        v_max
+    ))
     rect_number = 2
-    for i in range(rect_number):
-        angle = 2 * pi * random.random()
-        rects.append({
-            'x': random.randint(100, s_size[0] - 100),
-            'y': random.randint(100, s_size[1] - 100),
-            'r': radius * 2 // 3,
-            'vx': int(v_max * cos(angle)),
-            'vy': int(v_max * sin(angle)),
-            'color': random.choice(list(COLORS.values())[:-1]),  # removing BLACK color
-        })
+    rects.extend(coord_calc(
+        rect_number,
+        s_size[0],
+        s_size[1],
+        2 * radius // 3,
+        v_max
+    ))
 
     pygame.display.update()
     clock = pygame.time.Clock()
@@ -71,7 +66,7 @@ def main():
             if event.type == pygame.QUIT:
                 finished = True
             elif event.type == pygame.MOUSEBUTTONDOWN:
-                score += count_score(event, balls, v_max, s_size)
+                score += count_score(event, balls + rects, v_max, s_size)
 
         start_time, lap, is_showing = timer(
             pygame.time.get_ticks(),
@@ -84,7 +79,7 @@ def main():
 
         screen.fill(COLORS['BLACK'])
         show_score(screen, score)
-        move_elements(balls + rects, *s_size, radius)
+        move_elements(balls + rects, *s_size)
         if is_showing:
             show_balls(screen, balls)
             show_rects(screen, rects)
@@ -93,7 +88,31 @@ def main():
     pygame.quit()
 
 
-def move_elements(elems, w, h, bounce_lim):
+def coord_calc(n, max_x, max_y, size, v_max):
+    """
+    Calculates coordinates for n items and puts in `lst`
+    :param n: item amount
+    :param max_x: window's max width
+    :param max_y: window's max height
+    :param size: size of the item
+    :param v_max: full velocity
+    :return: list with items
+    """
+    elems = []
+    for i in range(n):
+        angle = 2 * pi * random.random()
+        elems.append({
+            'x': random.randint(100, max_x - 100),
+            'y': random.randint(100, max_y - 100),
+            'r': size,
+            'vx': int(v_max * cos(angle)),
+            'vy': int(v_max * sin(angle)),
+            'color': random.choice(list(COLORS.values())[:-1]),  # removing BLACK color
+        })
+    return elems
+
+
+def move_elements(elems, w, h):
     """
     Change elements' coordinates and check whether they should bounce the wall.
 
@@ -103,9 +122,9 @@ def move_elements(elems, w, h, bounce_lim):
     :return: None
     """
     for item in elems:
-        if item['x'] < bounce_lim or w - item['x'] < bounce_lim:
+        if item['x'] < item['r'] or w - item['x'] < item['r']:
             item['vx'] *= -1
-        if item['y'] < bounce_lim or h - item['y'] < bounce_lim:
+        if item['y'] < item['r'] or h - item['y'] < item['r']:
             item['vy'] *= -1
         item['x'] += item['vx']
         item['y'] += item['vy']
@@ -137,28 +156,55 @@ def show_rects(surface, rects):
         rect(surface, item['color'], (x, y, item['r'], item['r']))
 
 
-def count_score(event, balls, v_max, screen_size):
+def count_score(event, elems, v_max, s_size):
     """
-    Checks whether click is on area of any ball.
-    If yes, returns 1 and changes ball's parameters.
+    Checks whether click is on area of any element.
+    If yes, returns 1 and changes element's parameters.
 
     :param event: pygame Event object
-    :param balls: list of dictionaries with balls' data.
-    :return: 1 if click is on ball, 0 otherwise.
+    :param elems: list of dictionaries with balls' data.
+    :param v_max: full velocity module
+    :param s_size: screen's (width, height)
+    :return: score if click was on element, 0 otherwise
     """
     x, y = event.pos
-    res = 0
-    for item in balls:
-        distance = ((item['x'] - x) ** 2 +(item['y'] - y) ** 2) ** 0.5
-        if distance <= item['r']:
-            res = 1
-            angle = 2 * pi * random.random()
-            item['x'] = random.randint(100, screen_size[0] - 100)
-            item['y'] = random.randint(100, screen_size[1] - 100)
-            item['vx'] = int(v_max * cos(angle))
-            item['vy'] = int(v_max * sin(angle))
-            item['color'] = random.choice(list(COLORS.values())[:-1])  # removing BLACK color
+    for item in elems:
+        touching, res = is_touching(item, x, y)
+        if touching:
+            new = coord_calc(1, s_size[0], s_size[1], item['r'], v_max)[0]  # get new coords
+            for k in new.keys():
+                if k == 'r':
+                    continue
+                item[k] = new[k]
+            break
     return res
+
+
+def is_touching(item, click_x, click_y):
+    """
+    Determines if click was on the item in `balls` or `rects`.
+    If yes returns tuple with (True, score).
+
+    :param item: item in `balls` or `rects`
+    :param click_x: click x-coordinate
+    :param click_y: click y-coordinate
+    :return: (True, score) or (False, 0)
+    """
+    touching = False
+    res = 0
+    if item in rects:
+        dist_x = abs(item['x'] - click_x)
+        dist_y = abs(item['y'] - click_y)
+        if dist_x <= item['r'] and dist_y <= item['r']:
+            touching = True
+            res = 3
+    else:
+        distance = ((item['x'] - click_x) ** 2 + (item['y'] - click_y) ** 2) ** 0.5
+        if distance <= item['r']:
+            touching = True
+            res = 1
+
+    return touching, res
 
 
 def show_score(surface, score):
