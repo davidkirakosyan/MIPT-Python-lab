@@ -2,6 +2,8 @@ import pygame
 from pygame.draw import *
 import random
 from math import sin, cos, pi
+import csv
+from time import asctime
 
 COLORS = {
     'WHITE': 0xFFFFFF,
@@ -13,6 +15,7 @@ COLORS = {
     'CYAN': 0x00FFFF,
     'BLACK': 0x0,
 }
+FONT_COLOR = (255, 255, 255)
 balls = []
 rects = []
 
@@ -65,6 +68,7 @@ def main():
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
                 finished = True
+                write_into_file(screen, score)
             elif event.type == pygame.MOUSEBUTTONDOWN:
                 score += count_score(event, balls + rects, v_max, s_size)
 
@@ -216,7 +220,7 @@ def show_score(surface, score):
     :return: None
     """
     font = pygame.font.SysFont('arial', 25, True)
-    text = font.render("Score: {}".format(score), True, (255, 255, 255))
+    text = font.render("Score: {}".format(score), True, FONT_COLOR)
     surface.blit(text, text.get_rect())
 
 
@@ -242,6 +246,41 @@ def timer(curr_time, str_time, lap, show_t, hide_t, is_showing):
         else:
             lap = show_t
     return str_time, lap, is_showing
+
+
+def write_into_file(surface, score):
+    """
+    At the end of the game renders text with score,
+    asks player of his name and writes achievement in a csv file.
+
+    :param surface: pygame Surface object
+    :param score: player's score
+    :return: None
+    """
+    if score == 0:
+        return
+
+    surface.fill(COLORS['BLACK'])
+    w, h = surface.get_size()
+    font = pygame.font.SysFont('arial', 35, True)
+
+    text1 = "Your score is: {}!!!".format(score)
+    text1_obj = font.render(text1, True, FONT_COLOR)
+    rect1 = text1_obj.get_rect(center=(w // 2, h // 3))
+    text2 = "Please enter your name in terminal"
+    text2_obj = font.render(text2, True, FONT_COLOR)
+    rect2 = text2_obj.get_rect(center=(w // 2, h // 2))
+
+    surface.blit(text1_obj, rect1)
+    surface.blit(text2_obj, rect2)
+    pygame.display.update()
+
+    name = input("Please input your name to save score (or q to quit): ")
+    if name == 'q':
+        return
+    with open('achievements.csv', 'a') as f:
+        writer = csv.writer(f)
+        writer.writerow([name, score, asctime()])
 
 
 if __name__ == '__main__':
