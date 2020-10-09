@@ -4,6 +4,7 @@ import random
 from math import sin, cos, pi
 
 COLORS = {
+    'WHITE': 0xFFFFFF,
     'RED': 0xFF0000,
     'BLUE': 0x0000FF,
     'YELLOW': 0xFFFF00,
@@ -59,7 +60,7 @@ def main():
             if event.type == pygame.QUIT:
                 finished = True
             elif event.type == pygame.MOUSEBUTTONDOWN:
-                score += count_score(event, balls)
+                score += count_score(event, balls, v_max, s_size)
 
         start_time, lap, is_showing_balls = timer(
             pygame.time.get_ticks(),
@@ -71,6 +72,7 @@ def main():
         )
 
         screen.fill(COLORS['BLACK'])
+        show_score(screen, score)
         move_balls(balls, *s_size, radius)
         if is_showing_balls:
             show_balls(screen, balls)
@@ -83,7 +85,6 @@ def move_balls(balls, w, h, bounce_lim):
     """
     Change balls coordinates and checks whether they should bounce the wall.
 
-    :param surface: pygame Surface object
     :param balls: list of dictionaries with ball parameters
     :param w: width of window
     :param h: height of window
@@ -110,15 +111,41 @@ def show_balls(surface, balls):
         circle(surface, item['color'], (item['x'], item['y']), item['r'])
 
 
-def count_score(event, balls):
+def count_score(event, balls, v_max, screen_size):
     """
-    Checks whether click is on area of any ball. If yes, returns 1.
+    Checks whether click is on area of any ball.
+    If yes, returns 1 and changes ball's parameters.
 
     :param event: pygame Event object
     :param balls: list of dictionaries with balls' data.
     :return: 1 if click is on ball, 0 otherwise.
     """
-    pass
+    x, y = event.pos
+    res = 0
+    for item in balls:
+        distance = ((item['x'] - x) ** 2 +(item['y'] - y) ** 2) ** 0.5
+        if distance <= item['r']:
+            res = 1
+            angle = 2 * pi * random.random()
+            item['x'] = random.randint(100, screen_size[0] - 100)
+            item['y'] = random.randint(100, screen_size[1] - 100)
+            item['vx'] = int(v_max * cos(angle))
+            item['vy'] = int(v_max * sin(angle))
+            item['color'] = random.choice(list(COLORS.values())[:-1])  # removing BLACK color
+    return res
+
+
+def show_score(surface, score):
+    """
+    Draws player's score in top left corner of `screen`.
+
+    :param surface: pygame Surface object
+    :param score: player's score
+    :return: None
+    """
+    font = pygame.font.SysFont('arial', 25, True)
+    text = font.render("Score: {}".format(score), True, (255, 255, 255))
+    surface.blit(text, text.get_rect())
 
 
 def timer(curr_time, str_time, lap, show_t, hide_t, is_showing):
@@ -133,7 +160,7 @@ def timer(curr_time, str_time, lap, show_t, hide_t, is_showing):
     :param show_t: screen showing time in seconds
     :param hide_t: screen hiding time in seconds
     :param is_showing: Bool, if True balls can be seen.
-    :return: (new start time, new lap time, new is_showing
+    :return: new (start time, lap time, is_showing)
     """
     if (curr_time - str_time) / 1000 >= lap:
         is_showing = not is_showing
