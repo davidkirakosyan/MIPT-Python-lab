@@ -269,9 +269,11 @@ def ask_name(surface, clock, fps, score):
         clock.tick(fps)
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
-                entered_name = True
+                return
             elif event.type == pygame.KEYDOWN:
                 name += event.unicode
+                if event.key == pygame.K_BACKSPACE:
+                    name = name[:-2]  # including backspace char
                 if event.unicode == '\r':
                     entered_name = True
                     break
@@ -295,7 +297,7 @@ def render_end_screen(surface, score, name):
     """
     w, h = surface.get_size()
     surface.fill(COLORS['BLACK'])
-    font = pygame.font.SysFont('arial', 35, True)
+    font = pygame.font.SysFont('arial', 30, True)
 
     text1 = "Your score is: {}!!!".format(score)
     text1_obj = font.render(text1, True, FONT_COLOR)
@@ -307,6 +309,8 @@ def render_end_screen(surface, score, name):
     text3_obj = font.render(text3, True, FONT_COLOR)
     rect3 = text3_obj.get_rect(center=(w // 2, 2 * h // 3))
 
+    render_table(surface, w, h)
+
     surface.blit(text1_obj, rect1)
     surface.blit(text2_obj, rect2)
     surface.blit(text3_obj, rect3)
@@ -316,6 +320,56 @@ def render_end_screen(surface, score, name):
     surface.blit(name_obj, name_rect)
 
     pygame.display.update()
+
+
+def render_table(surface, w, h):
+    """
+    Draws table with first 5 best results from csv file
+
+    :param surface: pygame Surface object
+    :param w: width of `surface`
+    :param h: height of `surface`
+    :return: None
+    """
+    font = pygame.font.SysFont('arial', 22, True)
+
+    results = []
+    try:
+        with open('achievements.csv') as file:
+            reader = csv.reader(file)
+            for row in list(reader):
+                results.append({'name': row[0], 'score': row[1]})
+            results.sort(key=lambda item: int(item['score']), reverse=True)
+            results = results[:5]
+    except FileNotFoundError:
+        return
+    x = 7 * w // 10
+    y = 0
+
+    title_obj = font.render('Best Results', True, FONT_COLOR)
+    title_rect = title_obj.get_rect(center=(x + 3 * w // 20, h // 40))
+    surface.blit(title_obj, title_rect)
+    rect(surface, FONT_COLOR, (x, y, 3 * w // 10, h // 20), 1)
+
+    y += h // 20
+    for player in results:
+        name_obj = font.render(player['name'], True, FONT_COLOR)
+        name_rect = name_obj.get_rect(
+            center=(x + 3 * w // 40, y + h // 40)
+        )
+        score_obj = font.render(player['score'], True, FONT_COLOR)
+        score_rect = score_obj.get_rect(
+            center=(x + 9 * w // 40, y + h // 40)
+        )
+        surface.blit(name_obj, name_rect)
+        surface.blit(score_obj, score_rect)
+
+        rect(surface, FONT_COLOR,
+             (x, y, 3 * w // 20, h // 20), 1)
+        rect(surface, FONT_COLOR,
+             (x + 3 * w // 20, y, 3 * w // 20, h // 20), 1)
+
+        y += h // 20
 
 
 if __name__ == '__main__':
