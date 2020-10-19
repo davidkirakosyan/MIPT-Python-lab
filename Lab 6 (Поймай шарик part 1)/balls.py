@@ -60,7 +60,7 @@ def main():
     is_showing = True
     start_time = pygame.time.get_ticks()
     show_screen_t = 2  # 2 seconds
-    hide_screen_t = 5
+    hide_screen_t = 3
     lap = show_screen_t
 
     while not finished:
@@ -68,7 +68,6 @@ def main():
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
                 finished = True
-                write_into_file(screen, score)
             elif event.type == pygame.MOUSEBUTTONDOWN:
                 score += count_score(event, balls + rects, v_max, s_size)
 
@@ -89,6 +88,7 @@ def main():
             show_rects(screen, rects)
 
         pygame.display.update()
+    ask_name(screen, clock, FPS, score)
     pygame.quit()
 
 
@@ -151,7 +151,7 @@ def show_rects(surface, rects):
     Draws balls on `surface` object.
 
     :param surface: pygame Surface object
-    :param rects: list of dictionaries with balls' data.
+    :param rects: list of dictionaries with rectangles' data.
     :return: None
     """
     for item in rects:
@@ -166,7 +166,7 @@ def count_score(event, elems, v_max, s_size):
     If yes, returns 1 and changes element's parameters.
 
     :param event: pygame Event object
-    :param elems: list of dictionaries with balls' data.
+    :param elems: list of dictionaries with elements' data.
     :param v_max: full velocity module
     :param s_size: screen's (width, height)
     :return: score if click was on element, 0 otherwise
@@ -227,7 +227,7 @@ def show_score(surface, score):
 def timer(curr_time, str_time, lap, show_t, hide_t, is_showing):
     """
     Checks if current time is bigger than timer start time + lap time.
-    If true balls showing condition changes.
+    If true elements showing condition changes.
     Lap time also changes in order to provide different show/hide interval.
 
     :param curr_time: current time in milliseconds
@@ -235,7 +235,7 @@ def timer(curr_time, str_time, lap, show_t, hide_t, is_showing):
     :param lap: lap time in seconds
     :param show_t: screen showing time in seconds
     :param hide_t: screen hiding time in seconds
-    :param is_showing: Bool, if True balls can be seen.
+    :param is_showing: Bool, if True elements can be seen.
     :return: new (start time, lap time, is_showing)
     """
     if (curr_time - str_time) / 1000 >= lap:
@@ -248,39 +248,74 @@ def timer(curr_time, str_time, lap, show_t, hide_t, is_showing):
     return str_time, lap, is_showing
 
 
-def write_into_file(surface, score):
+def ask_name(surface, clock, fps, score):
     """
     At the end of the game renders text with score,
     asks player of his name and writes achievement in a csv file.
 
     :param surface: pygame Surface object
+    :param clock: pygame Clock
+    :param fps: fps for clock
     :param score: player's score
     :return: None
     """
     if score == 0:
         return
 
-    surface.fill(COLORS['BLACK'])
+    entered_name = False
+    name = ''
+    render_end_screen(surface, score, name)
+    while not entered_name:
+        clock.tick(fps)
+        for event in pygame.event.get():
+            if event.type == pygame.QUIT:
+                entered_name = True
+            elif event.type == pygame.KEYDOWN:
+                name += event.unicode
+                if event.unicode == '\r':
+                    entered_name = True
+                    break
+                render_end_screen(surface, score, name)
+    if name[-1] == '\r':
+        name = name[:-1]
+        with open('achievements.csv', 'a') as file:
+            writer = csv.writer(file)
+            writer.writerow([name, score, asctime()])
+
+
+def render_end_screen(surface, score, name):
+    """
+    Renders text with score, asks player of his name.
+    Prints player's name during typing.
+
+    :param surface: pygame Surface object
+    :param score: player's score
+    :param name: player's entered name
+    :return: None
+    """
     w, h = surface.get_size()
+    surface.fill(COLORS['BLACK'])
     font = pygame.font.SysFont('arial', 35, True)
 
     text1 = "Your score is: {}!!!".format(score)
     text1_obj = font.render(text1, True, FONT_COLOR)
     rect1 = text1_obj.get_rect(center=(w // 2, h // 3))
-    text2 = "Please enter your name in terminal"
+    text2 = "Please enter your name: "
     text2_obj = font.render(text2, True, FONT_COLOR)
-    rect2 = text2_obj.get_rect(center=(w // 2, h // 2))
+    rect2 = text2_obj.get_rect(center=(w // 3, h // 2))
+    text3 = "or press X button to quit."
+    text3_obj = font.render(text3, True, FONT_COLOR)
+    rect3 = text3_obj.get_rect(center=(w // 2, 2 * h // 3))
 
     surface.blit(text1_obj, rect1)
     surface.blit(text2_obj, rect2)
-    pygame.display.update()
+    surface.blit(text3_obj, rect3)
 
-    name = input("Please input your name to save score (or q to quit): ")
-    if name == 'q':
-        return
-    with open('achievements.csv', 'a') as f:
-        writer = csv.writer(f)
-        writer.writerow([name, score, asctime()])
+    name_obj = font.render(name, True, FONT_COLOR)
+    name_rect = name_obj.get_rect(center=(2 * w // 3, h // 2))
+    surface.blit(name_obj, name_rect)
+
+    pygame.display.update()
 
 
 if __name__ == '__main__':
