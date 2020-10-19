@@ -325,6 +325,7 @@ def render_end_screen(surface, score, name):
 def render_table(surface, w, h):
     """
     Draws table with first 5 best results from csv file
+    in top right angle of end screen.
 
     :param surface: pygame Surface object
     :param w: width of `surface`
