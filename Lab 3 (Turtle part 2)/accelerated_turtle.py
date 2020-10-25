@@ -26,7 +26,6 @@ while not (v_y < 3 and y < 1):
     turtle.goto(x, y)
     if y < 1:
         v_y = 0.9 * abs(v_y)
-        print(y, v_y)
     else:
         v_y += (a_y - k * v_y) * dt  #
     v_x -= k * v_x * dt
