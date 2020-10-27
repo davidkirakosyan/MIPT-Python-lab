@@ -13,10 +13,10 @@ class Game:
     COLORS = {
         'RED': 0xFF0000,
         'BLUE': 0x0000FF,
-        'YELLOW': 0xFFFF00,
+        'YELLOW': 0xFFC91F,
         'GREEN': 0x00FF00,
-        'MAGENTA': 0xFF00FF,
-        'CYAN': 0x00FFFF,
+        'MAGENTA': 0xFF03B8,
+        'CYAN': 0x00FFCC,
     }
     BLACK = (0, 0, 0)
 
@@ -28,7 +28,9 @@ class Game:
         pygame.init()
         self.screen = pygame.display.set_mode((self.width, self.height))
         self.screen.fill(self.bg)
+        self.font = pygame.font.SysFont('arial', 30, True)
         self.clock = pygame.time.Clock()
+        self.tries = 0
 
         self.cannon = Cannon(
             self.screen,
@@ -37,15 +39,18 @@ class Game:
             0.05 * self.height,
             random.choice(list(self.COLORS.values())),
         )
-
-        target_colors = list(self.COLORS.values())
-        target_colors.remove(self.cannon.color)
-        self.target = Ball(
-            random.randint(7 * self.width // 10, self.width),
+        self.target_colors = list(self.COLORS.values())
+        self.target_colors.remove(self.cannon.color)
+        target_args = (
+            self.screen,
+            random.randint(7 * self.width // 10, 9 * self.width // 10),
             random.randint(self.height // 10, 8 * self.height // 10),
-            random.randint(self.height // 30, self.height // 20),
-            random.choice(target_colors),
-        )
+            random.choice(self.target_colors),
+        )  # without size
+        self.targets = [
+            Ball(*target_args, random.randint(self.height // 30, self.height // 20)),
+            Emoji(*target_args, random.randint(self.height // 20, self.height // 10))
+        ]
 
     def mainloop(self):
         finished = False
@@ -66,60 +71,70 @@ class Game:
                     mouse_down = True
                 if event.type == pygame.MOUSEBUTTONUP:
                     self.cannon.shoot()
-                    self.target.tries += 1
+                    self.tries += 1
                     mouse_down = False
             if mouse_down:
                 self.cannon.increase_muzzle()
 
+            self.show_scores()
+
             if self.cannon.missiles:
                 self.handle_missiles()
 
-            self.show_scores()
-            self.target.draw(self)
+            for target in self.targets:
+                target.draw(self)
+                if type(target) == Emoji:
+                    target.move(self)
             self.cannon.draw(self)
+
             pygame.display.update()
         pygame.quit()
 
     def show_scores(self):
-        font = pygame.font.SysFont('arial', 25, True)
-        text = font.render("Score: {}".format(self.score), True, self.BLACK)
+        text = self.font.render("Score: {}".format(self.score), True, self.BLACK)
+        x_ = self.width // 20
+        y_ = self.height // 20
+        self.screen.blit(text, (x_, y_))
+
+        text = self.font.render("Tries: {}".format(self.tries), True, self.BLACK)
         x_ = self.width // 20
         y_ = self.height // 10
         self.screen.blit(text, (x_, y_))
-
-    def show_tries(self, other):
-        """
-        :type other: Target
-        """
-        self.screen.fill(self.bg)  # render only text
-
-        font = pygame.font.SysFont('arial', 30, True)
-        text = font.render("Target was shot after {} tries.".format(other.tries), True, self.BLACK)
-        rect_ = text.get_rect(center=(self.width // 2, self.height // 2))
-        self.screen.blit(text, rect_)
-
-        pygame.display.update()
-        pygame.time.delay(1500)  # 1.5 sec
 
     def handle_missiles(self):
         y_max = 0.9 * self.height
         x_max = self.width
         for missile in self.cannon.missiles:
-            if missile.is_dead(y_max):
-                self.cannon.missiles.remove(missile)
-            elif self.target.is_touching(missile):
-                self.cannon.missiles = []
-                self.show_tries(self.target)
-
-                self.target = Ball(
-                    random.randint(5 * self.width // 10, 8 * self.width // 10),
-                    random.randint(3 * self.height // 10, 8 * self.height // 10),
-                    random.randint(self.height // 30, self.height // 20),
-                    random.choice(list(self.COLORS.values())),
-                )
-                self.score += 1
             missile.move(x_max, y_max)
             missile.draw(self)
+            if missile.is_dead(y_max):
+                self.cannon.missiles.remove(missile)
+            for target in self.targets:
+                if target.is_touching(missile):
+                    self.cannon.missiles.remove(missile)
+                    self.is_shot = True
+                    self.tries = 0
+
+                    self.targets.remove(target)
+
+                    args = (
+                        self.screen,
+                        random.randint(7 * self.width // 10, 9 * self.width // 10),
+                        random.randint(self.height // 10, 8 * self.height // 10),
+                        random.choice(self.target_colors),
+                    )
+                    if type(target) == Ball:
+                        self.targets.append(Ball(
+                            *args,
+                            random.randint(self.height // 30, self.height // 20),
+                        ))
+                    elif type(target) == Emoji:
+                        self.targets.append(Emoji(
+                            *args,
+                            random.randint(self.height // 20, self.height // 10),
+                        ))
+                    self.score += target.award
+                    break  # don't check for removed missile
 
 
 class Cannon:
@@ -144,6 +159,7 @@ class Cannon:
     def draw(self, other: Game):
         """
         Draws cannon with its muzzle.
+
         :return: None
         """
         circle(self.screen, self.color, (self.x, self.y), self.r)
@@ -212,10 +228,10 @@ class Missile:
         :return:
         """
         dt = 0.07
-        if self.x <= self.r or x_max - self.x <= 2 * self.r:
-            self.v_x *= -0.9
-        if y_max - self.y <= 2 * self.r:
-            self.v_y *= -0.5
+        if x_max - self.x <= self.r:
+            self.v_x = -0.9 * abs(self.v_x)
+        if y_max - self.y <= self.r:
+            self.v_y = -0.5 * abs(self.v_y)
             self.v_x *= 0.8  # ground friction
         self.v_x += - self.k * self.v_x * dt
         self.v_y += self.g * dt - self.k * self.v_y * dt
@@ -228,6 +244,7 @@ class Missile:
     def draw(self, other: Game):
         """
         Draws missile.
+
         :param other: Game object
         :return: None
         """
@@ -240,22 +257,12 @@ class Missile:
 
 
 class Target:
-    def __init__(self, x, y, size, color):
+    def __init__(self, screen, x, y, color, size):
+        self.screen = screen
         self.x = int(x)
         self.y = int(y)
         self.size = int(size)
         self.color = color
-        self.tries = 0
-
-
-class Ball(Target):
-    def draw(self, other: Game):
-        """
-        Draws ball targets with radius = size
-        :return: None
-        """
-        circle(other.screen, self.color, (self.x, self.y), self.size)
-        circle(other.screen, other.BLACK, (self.x, self.y), self.size, 1)
 
     def is_touching(self, other: Missile):
         """
@@ -264,6 +271,66 @@ class Ball(Target):
         """
         dist = ((self.x - other.x) ** 2 + (self.y - other.y) ** 2) ** 0.5
         return dist <= self.size + other.r
+
+
+class Ball(Target):
+    def __init__(self, screen, x, y, color, size):
+        super().__init__(screen, x, y, color, size)
+        self.award = 1
+
+    def draw(self, other: Game):
+        """
+        Draws ball targets with radius = size
+        :return: None
+        """
+        circle(self.screen, self.color, (self.x, self.y), self.size)
+        circle(self.screen, other.BLACK, (self.x, self.y), self.size, 1)
+
+
+class Emoji(Target):
+    def __init__(self, screen, x, y, color, size):
+        super().__init__(screen, x, y, color, size)
+        self.award = 3
+        self.v_x = random.randint(-10, 10)
+        self.v_y = random.randint(-3, 3)
+
+    def draw(self, other: Game):
+        """
+        Draws ball targets with radius = size
+
+        :return: None
+        """
+        circle(other.screen, other.COLORS['RED'], (self.x, self.y), self.size)
+
+        left_eye = (self.x - self.size // 3, self.y - self.size // 3)
+        circle(other.screen, other.BLACK, left_eye, self.size // 4)
+        circle(other.screen, other.COLORS['RED'], left_eye, self.size // 10)
+
+        right_eye = (self.x + self.size // 3, self.y - self.size // 3)
+        circle(other.screen, other.BLACK, right_eye, self.size // 4)
+        circle(other.screen, other.COLORS['RED'], right_eye, self.size // 10)
+
+        mouth_rect = (self.x - self.size // 3, self.y + self.size // 4, 2 * self.size // 3, 2*self.size // 3)
+        arc(self.screen, other.BLACK, mouth_rect, 0, math.pi, 3)
+
+        circle(other.screen, other.BLACK, (self.x, self.y), self.size, 2)
+
+    def move(self, other: Game):
+        x_max = 9 * other.width / 10
+        x_min = x_max - 5 * self.size
+        y_max = 8 * other.height // 10
+        y_min = y_max - 5 * self.size
+        if self.x - x_min <= 0:
+            self.v_x = abs(self.v_x)
+        elif x_max - self.x <= 0:
+            self.v_x = -abs(self.v_x)
+        if self.y - y_min <= 0:
+            self.v_y = abs(self.v_y)
+        elif y_max - self.y <= 0:
+            self.v_y = -abs(self.v_y)
+
+        self.x = int(self.x + self.v_x)
+        self.y = int(self.y + self.v_y)
 
 
 if __name__ == "__main__":
