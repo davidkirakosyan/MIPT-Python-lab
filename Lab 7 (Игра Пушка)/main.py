@@ -1,4 +1,3 @@
-from abc import ABC, abstractmethod
 import random
 import math
 
@@ -36,16 +35,28 @@ class Game:
         )
         self.target_colors = GAME_COLORS
         self.target_colors.remove(self.cannon.color)
-        target_args = (
-            self.screen,
-            random.randint(7 * self.width // 10, 9 * self.width // 10),
-            random.randint(self.height // 10, 8 * self.height // 10),
-            random.choice(self.target_colors),
-        )  # without size
-        self.targets = [
-            Ball(*target_args, random.randint(self.height // 30, self.height // 20)),
-            Emoji(*target_args, random.randint(self.height // 20, self.height // 10))
-        ]
+        self.targets = []
+        for i in range(2):
+            self.targets.append(
+                Ball(
+                    self.screen,
+                    random.randint(5 * self.width // 10, 9 * self.width // 10),
+                    random.randint(self.height // 10, 8 * self.height // 10),
+                    random.choice(self.target_colors),
+                    random.randint(self.height // 30, self.height // 20),
+                )
+            )
+        self.emojis = []
+        for i in range(1):
+            self.emojis.append(
+                Emoji(
+                    self.screen,
+                    random.randint(5 * self.width // 10, 9 * self.width // 10),
+                    random.randint(self.height // 10, 8 * self.height // 10),
+                    random.choice(self.target_colors),
+                    random.randint(self.height // 15, self.height // 10),
+                )
+            )
 
     def mainloop(self):
         finished = False
@@ -78,7 +89,10 @@ class Game:
 
             for target in self.targets:
                 target.draw()
-                target.move(self.width, self.height)
+            for emoji in self.emojis:
+                emoji.draw()
+                self.emoji_move_control(emoji)
+                emoji.move(self.width, self.height)
             self.cannon.draw(self.bg)
 
             pygame.display.update()
@@ -103,31 +117,55 @@ class Game:
             missile.draw()
             if missile.is_dead(y_max):
                 self.cannon.missiles.remove(missile)
-            for target in self.targets:
-                if target.is_touching(missile):
-                    self.cannon.missiles.remove(missile)
-                    self.tries = 0
+            if not self.check_target_touching(missile):
+                self.check_emoji_touching(missile)
 
-                    self.targets.remove(target)
+    def check_target_touching(self, missile):
+        """
+        Checks if missile is touching one of the targets.
 
-                    args = (
-                        self.screen,
-                        random.randint(7 * self.width // 10, 9 * self.width // 10),
-                        random.randint(self.height // 10, 8 * self.height // 10),
-                        random.choice(self.target_colors),
-                    )
-                    if type(target) == Ball:
-                        self.targets.append(Ball(
-                            *args,
-                            random.randint(self.height // 30, self.height // 20),
-                        ))
-                    elif type(target) == Emoji:
-                        self.targets.append(Emoji(
-                            *args,
-                            random.randint(self.height // 20, self.height // 10),
-                        ))
-                    self.score += target.award
-                    break  # don't check for removed missile
+        :type missile: Missile
+        :return: True, if is touching, False otherwise
+        """
+        for target in self.targets:
+            if target.is_touching(missile):
+                self.cannon.missiles.remove(missile)
+                self.tries = 0
+                self.targets.remove(target)
+                args = (
+                    self.screen,
+                    random.randint(5 * self.width // 10, 9 * self.width // 10),
+                    random.randint(self.height // 10, 8 * self.height // 10),
+                    random.choice(self.target_colors),
+                )
+                self.targets.append(Ball(
+                    *args,
+                    random.randint(self.height // 30, self.height // 20),
+                ))
+                self.score += target.award
+                return True
+        return False
+
+    def check_emoji_touching(self, missile):
+        for emoji in self.emojis:
+            if emoji.is_touching(missile):
+                self.cannon.missiles.remove(missile)
+                break
+
+    def emoji_move_control(self, emoji):
+        """
+        Orients emoji to catch missile.
+
+        :type emoji: Emoji
+        :return: None
+        """
+        if self.cannon.missiles:
+            tr = self.cannon.missiles[0].trajectory
+            emoji.dest_x, emoji.dest_y = min_dist(tr, self.targets[0])
+        else:
+            emoji.dest_x = 0
+            emoji.dest_y = 0
+
 
 
 class Cannon:
@@ -165,6 +203,16 @@ class Cannon:
 
         y_ = self.y - plot.get_height() + self.height // 2
         self.screen.blit(plot, (self.x, y_))
+
+        tr = trajectory(
+            self.angle,
+            self.x + self.width * math.cos(self.angle),
+            self.y - self.width * math.sin(self.angle),
+            20 * (self.width / self.r - 1),
+            10,
+            0.1
+        )[:6]
+        aalines(self.screen, GREY, False, tr)
 
     def rotate_muzzle(self, event: pygame.event.EventType):
         """
@@ -210,6 +258,7 @@ class Missile:
         self.v_y = - vel * math.sin(self.angle)
         self.r = int(radius)
         self.color = color
+        self.trajectory = trajectory(angle, x, y, vel, self.g, self.k)
         self.time = 0
 
     def move(self, x_max, y_max):
@@ -248,36 +297,14 @@ class Missile:
         return self.time > 100 or is_on_bottom or is_over_top
 
 
-class Target(ABC):
+class Ball:
     def __init__(self, screen, x, y, color, size):
+        self.award = 1
         self.screen = screen
         self.x = int(x)
         self.y = int(y)
         self.size = int(size)
         self.color = color
-
-    def is_touching(self, other: Missile):
-        """
-        Checks for collision with `other`
-
-        :return: True if is touching `other`
-        """
-        dist = ((self.x - other.x) ** 2 + (self.y - other.y) ** 2) ** 0.5
-        return dist <= self.size + other.r
-
-    @abstractmethod
-    def draw(self):
-        pass
-
-    @abstractmethod
-    def move(self, scr_width, scr_height):
-        pass
-
-
-class Ball(Target):
-    def __init__(self, screen, x, y, color, size):
-        super().__init__(screen, x, y, color, size)
-        self.award = 1
 
     def draw(self):
         """
@@ -288,19 +315,27 @@ class Ball(Target):
         circle(self.screen, self.color, (self.x, self.y), self.size)
         circle(self.screen, BLACK, (self.x, self.y), self.size, 1)
 
-    def move(self, scr_width, scr_height):
+    def is_touching(self, other: Missile):
         """
-        This target doesn't move.
+        Checks for collision with `other`
+
+        :return: True if is touching `other`
         """
-        pass
+        dist = ((self.x - other.x) ** 2 + (self.y - other.y) ** 2) ** 0.5
+        return dist <= self.size + other.r
 
 
-class Emoji(Target):
+class Emoji:
     def __init__(self, screen, x, y, color, size):
-        super().__init__(screen, x, y, color, size)
-        self.award = 3
-        self.v_x = random.randint(-10, 10)
-        self.v_y = random.randint(-3, 3)
+        self.screen = screen
+        self.x = int(x)
+        self.y = int(y)
+        self.size = int(size)
+        self.v_x = 5
+        self.v_y = 5
+        self.color = color
+        self.dest_x = 0
+        self.dest_y = 0
 
     def draw(self):
         """
@@ -325,27 +360,92 @@ class Emoji(Target):
 
     def move(self, scr_width, scr_height):
         """
-        Moves Emoji.
+        Moves Emoji depending on cannon's direction.
 
-        :param scr_width: screen's width.
-        :param scr_height: screen's height.
+        :param scr_width: screen's width
+        :param scr_height: screen's height
         :return: None
         """
-        x_max = 9 * scr_width / 10
-        x_min = x_max - 5 * self.size
+        x_max = 9 * scr_width // 10
+        x_min = 5 * scr_width // 10
         y_max = 8 * scr_height // 10
-        y_min = y_max - 5 * self.size
-        if self.x - x_min <= 0:
-            self.v_x = abs(self.v_x)
-        elif x_max - self.x <= 0:
-            self.v_x = -abs(self.v_x)
-        if self.y - y_min <= 0:
-            self.v_y = abs(self.v_y)
-        elif y_max - self.y <= 0:
-            self.v_y = -abs(self.v_y)
+        y_min = scr_height // 10
+
+        if self.dest_x == 0 and self.dest_y == 0:
+            if abs(self.v_x) < 5 and abs(self.v_y) < 5:
+                self.v_x = -5
+                self.v_y = 5
+            if self.x - x_min <= 0:
+                self.v_x = abs(self.v_x)
+            elif x_max - self.x <= 0:
+                self.v_x = -abs(self.v_x)
+            if self.y - y_min <= 0:
+                self.v_y = abs(self.v_y)
+            elif y_max - self.y <= 0:
+                self.v_y = -abs(self.v_y)
+        else:
+            self.v_x = - 0.04 * (self.x - self.dest_x)
+            self.v_y = - 0.04 * (self.y - self.dest_y)
+            if abs(self.v_x) < 0.05:
+                self.v_x = 0
+            if abs(self.v_y) < 0.05:
+                self.v_y = 0
 
         self.x = int(self.x + self.v_x)
         self.y = int(self.y + self.v_y)
+
+    def is_touching(self, other: Missile):
+        """
+        Checks for collision with `other`
+
+        :return: True if is touching `other`
+        """
+        dist = ((self.x - other.x) ** 2 + (self.y - other.y) ** 2) ** 0.5
+        return dist <= self.size + other.r
+
+
+def min_dist(traject, target):
+    """
+    Calculates the nearest to the target point, which the missile can reach.
+
+    :param traject: missile's trajectory
+    :param target: Ball object
+    :return: the nearest point's (x, y)
+    """
+    dist = []
+    for x, y in traject:
+        dist.append(((x - target.x) ** 2 + (y - target.y) ** 2) ** 0.5)
+    return traject[dist.index(min(dist))]
+
+
+def trajectory(angle, x_0, y_0, vel, g, k):
+    """
+    Calculates trajectory of a missile
+    
+    :param angle: initial angle from horizon 
+    :param x_0: initial x-coordinate
+    :param y_0: initial y-coordinate
+    :param vel: initial velocity
+    :param g: gravity acceleration
+    :param k: air resistance coefficient
+    :return: [(x,y)], points of the trajectory
+    """
+    dt = 0.07
+    x, y = int(x_0), int(y_0)
+    dx = vel * math.cos(angle)
+    dy = - vel * math.sin(angle)
+
+    traject = []
+    for i in range(100):
+        traject.append((x, y))
+        dx += - k * dx * dt
+        dy += g * dt - k * dy * dt
+        x = int(x + dx)
+        y = int(y + dy)
+        if y < 0:
+            break
+
+    return traject
 
 
 if __name__ == "__main__":
