@@ -46,17 +46,17 @@ class Game:
                     random.randint(self.height // 30, self.height // 20),
                 )
             )
-        self.emojis = []
-        for i in range(1):
-            self.emojis.append(
-                Emoji(
-                    self.screen,
-                    random.randint(5 * self.width // 10, 9 * self.width // 10),
-                    random.randint(self.height // 10, 8 * self.height // 10),
-                    random.choice(self.target_colors),
-                    random.randint(self.height // 15, self.height // 10),
-                )
+        self.emoji_n = 1
+        self.emojis = [
+            Emoji(
+                self.screen,
+                random.randint(5 * self.width // 10, 9 * self.width // 10),
+                random.randint(self.height // 10, 8 * self.height // 10),
+                random.choice(self.target_colors),
+                random.randint(self.height // 15, self.height // 10),
+                0
             )
+        ]
 
     def mainloop(self):
         finished = False
@@ -89,10 +89,14 @@ class Game:
 
             for target in self.targets:
                 target.draw()
-            for emoji in self.emojis:
+            for i, emoji in enumerate(self.emojis):
+                if emoji.health <= 0:
+                    self.emojis.remove(emoji)
+                    continue
                 emoji.draw()
-                self.emoji_move_control(emoji)
+                self.emoji_move_control(emoji, i)
                 emoji.move(self.width, self.height)
+            self.add_emoji()
             self.cannon.draw(self.bg)
 
             pygame.display.update()
@@ -152,20 +156,41 @@ class Game:
                 self.cannon.missiles.remove(missile)
                 break
 
-    def emoji_move_control(self, emoji):
+    def emoji_move_control(self, emoji, index):
         """
         Orients emoji to catch missile.
 
         :type emoji: Emoji
+        :param index: index of emoji in self.emojis
         :return: None
         """
+        if index + 1 > len(self.targets):
+            index = random.randint(0, len(self.targets) - 1)
         if self.cannon.missiles:
             tr = self.cannon.missiles[0].trajectory
-            emoji.dest_x, emoji.dest_y = min_dist(tr, self.targets[0])
+            emoji.dest_x, emoji.dest_y = min_dist(tr, self.targets[emoji.t_index])
         else:
             emoji.dest_x = 0
             emoji.dest_y = 0
 
+    def add_emoji(self):
+        if self.score % 5 == 0 or len(self.emojis) == 0:
+            self.emoji_n = self.score // 5 + 1
+            if len(self.emojis) < self.emoji_n:
+                if len(self.emojis) >= len(self.targets):
+                    target_index = random.randint(0, len(self.targets) - 1)
+                else:
+                    target_index = len(self.emojis)
+                self.emojis.append(
+                    Emoji(
+                        self.screen,
+                        random.randint(5 * self.width // 10, 9 * self.width // 10),
+                        random.randint(self.height // 10, 8 * self.height // 10),
+                        random.choice(self.target_colors),
+                        random.randint(self.height // 15, self.height // 10),
+                        target_index,
+                    )
+                )
 
 
 class Cannon:
@@ -326,16 +351,20 @@ class Ball:
 
 
 class Emoji:
-    def __init__(self, screen, x, y, color, size):
+    def __init__(self, screen, x, y, color, size, target_index):
         self.screen = screen
         self.x = int(x)
         self.y = int(y)
         self.size = int(size)
+        self.color = color
+        self.health = 10
         self.v_x = 5
         self.v_y = 5
-        self.color = color
+        # destination coordinates
         self.dest_x = 0
         self.dest_y = 0
+        # which target would be protected
+        self.t_index = target_index
 
     def draw(self):
         """
@@ -373,8 +402,8 @@ class Emoji:
 
         if self.dest_x == 0 and self.dest_y == 0:
             if abs(self.v_x) < 5 and abs(self.v_y) < 5:
-                self.v_x = -5
-                self.v_y = 5
+                self.v_x = random.randint(-5, 5)
+                self.v_y = random.randint(-5, 5)
             if self.x - x_min <= 0:
                 self.v_x = abs(self.v_x)
             elif x_max - self.x <= 0:
@@ -401,7 +430,10 @@ class Emoji:
         :return: True if is touching `other`
         """
         dist = ((self.x - other.x) ** 2 + (self.y - other.y) ** 2) ** 0.5
-        return dist <= self.size + other.r
+        if dist <= self.size + other.r:
+            self.health -= 1
+            return True
+        return False
 
 
 def min_dist(traject, target):
