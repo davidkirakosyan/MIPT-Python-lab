@@ -1,7 +1,11 @@
-import pygame
-from pygame.draw import *
+from abc import ABC, abstractmethod
 import random
 import math
+
+import pygame
+from pygame.draw import *
+
+from colors import *
 
 
 class Game:
@@ -10,20 +14,11 @@ class Game:
     """
     FPS = 30
     score = 0
-    COLORS = {
-        'RED': 0xFF0000,
-        'BLUE': 0x0000FF,
-        'YELLOW': 0xFFC91F,
-        'GREEN': 0x00FF00,
-        'MAGENTA': 0xFF03B8,
-        'CYAN': 0x00FFCC,
-    }
-    BLACK = (0, 0, 0)
 
     def __init__(self, width, height):
         self.width = width
         self.height = height
-        self.bg = 0xFFFFFF
+        self.bg = WHITE
 
         pygame.init()
         self.screen = pygame.display.set_mode((self.width, self.height))
@@ -37,9 +32,9 @@ class Game:
             0.1 * self.width,
             0.85 * self.height,
             0.05 * self.height,
-            random.choice(list(self.COLORS.values())),
+            random.choice(GAME_COLORS),
         )
-        self.target_colors = list(self.COLORS.values())
+        self.target_colors = GAME_COLORS
         self.target_colors.remove(self.cannon.color)
         target_args = (
             self.screen,
@@ -59,7 +54,7 @@ class Game:
             self.clock.tick(self.FPS)
 
             self.screen.fill(self.bg)
-            line(self.screen, self.BLACK, (0, 9 * self.height // 10),
+            line(self.screen, BLACK, (0, 9 * self.height // 10),
                  (self.width, 9 * self.height // 10))
 
             for event in pygame.event.get():
@@ -82,21 +77,21 @@ class Game:
                 self.handle_missiles()
 
             for target in self.targets:
-                target.draw(self)
+                target.draw()
                 if type(target) == Emoji:
-                    target.move(self)
-            self.cannon.draw(self)
+                    target.move(self.width, self.height)
+            self.cannon.draw(self.bg)
 
             pygame.display.update()
         pygame.quit()
 
     def show_scores(self):
-        text = self.font.render("Score: {}".format(self.score), True, self.BLACK)
+        text = self.font.render("Score: {}".format(self.score), True, BLACK)
         x_ = self.width // 20
         y_ = self.height // 20
         self.screen.blit(text, (x_, y_))
 
-        text = self.font.render("Tries: {}".format(self.tries), True, self.BLACK)
+        text = self.font.render("Tries: {}".format(self.tries), True, BLACK)
         x_ = self.width // 20
         y_ = self.height // 10
         self.screen.blit(text, (x_, y_))
@@ -106,13 +101,12 @@ class Game:
         x_max = self.width
         for missile in self.cannon.missiles:
             missile.move(x_max, y_max)
-            missile.draw(self)
+            missile.draw()
             if missile.is_dead(y_max):
                 self.cannon.missiles.remove(missile)
             for target in self.targets:
                 if target.is_touching(missile):
                     self.cannon.missiles.remove(missile)
-                    self.is_shot = True
                     self.tries = 0
 
                     self.targets.remove(target)
@@ -156,18 +150,18 @@ class Cannon:
         self.delta_muz = self.r // 25
         self.missiles = []
 
-    def draw(self, other: Game):
+    def draw(self, bg_color):
         """
         Draws cannon with its muzzle.
 
         :return: None
         """
         circle(self.screen, self.color, (self.x, self.y), self.r)
-        circle(self.screen, other.BLACK, (self.x, self.y), self.r, 2)
+        circle(self.screen, BLACK, (self.x, self.y), self.r, 2)
 
         plot = pygame.Surface((self.width, self.height))
         plot.fill(self.color)
-        plot.set_colorkey(other.bg)
+        plot.set_colorkey(bg_color)
         plot = pygame.transform.rotate(plot, math.degrees(self.angle))
 
         y_ = self.y - plot.get_height() + self.height // 2
@@ -241,11 +235,10 @@ class Missile:
 
         self.time += dt
 
-    def draw(self, other: Game):
+    def draw(self):
         """
         Draws missile.
 
-        :param other: Game object
         :return: None
         """
         circle(self.screen, self.color, (self.x, self.y), self.r)
@@ -256,7 +249,7 @@ class Missile:
         return self.time > 100 or is_on_bottom or is_over_top
 
 
-class Target:
+class Target(ABC):
     def __init__(self, screen, x, y, color, size):
         self.screen = screen
         self.x = int(x)
@@ -267,10 +260,19 @@ class Target:
     def is_touching(self, other: Missile):
         """
         Checks for collision with `other`
-        :return: True if is touching `other`.
+
+        :return: True if is touching `other`
         """
         dist = ((self.x - other.x) ** 2 + (self.y - other.y) ** 2) ** 0.5
         return dist <= self.size + other.r
+
+    @abstractmethod
+    def draw(self):
+        pass
+
+    @abstractmethod
+    def move(self, scr_width, scr_height):
+        pass
 
 
 class Ball(Target):
@@ -278,13 +280,20 @@ class Ball(Target):
         super().__init__(screen, x, y, color, size)
         self.award = 1
 
-    def draw(self, other: Game):
+    def draw(self):
         """
         Draws ball targets with radius = size
+
         :return: None
         """
         circle(self.screen, self.color, (self.x, self.y), self.size)
-        circle(self.screen, other.BLACK, (self.x, self.y), self.size, 1)
+        circle(self.screen, BLACK, (self.x, self.y), self.size, 1)
+
+    def move(self, scr_width, scr_height):
+        """
+        This target doesn't move.
+        """
+        pass
 
 
 class Emoji(Target):
@@ -294,31 +303,38 @@ class Emoji(Target):
         self.v_x = random.randint(-10, 10)
         self.v_y = random.randint(-3, 3)
 
-    def draw(self, other: Game):
+    def draw(self):
         """
         Draws ball targets with radius = size
 
         :return: None
         """
-        circle(other.screen, other.COLORS['RED'], (self.x, self.y), self.size)
+        circle(self.screen, RED, (self.x, self.y), self.size)
 
         left_eye = (self.x - self.size // 3, self.y - self.size // 3)
-        circle(other.screen, other.BLACK, left_eye, self.size // 4)
-        circle(other.screen, other.COLORS['RED'], left_eye, self.size // 10)
+        circle(self.screen, BLACK, left_eye, self.size // 4)
+        circle(self.screen, RED, left_eye, self.size // 10)
 
         right_eye = (self.x + self.size // 3, self.y - self.size // 3)
-        circle(other.screen, other.BLACK, right_eye, self.size // 4)
-        circle(other.screen, other.COLORS['RED'], right_eye, self.size // 10)
+        circle(self.screen, BLACK, right_eye, self.size // 4)
+        circle(self.screen, RED, right_eye, self.size // 10)
 
-        mouth_rect = (self.x - self.size // 3, self.y + self.size // 4, 2 * self.size // 3, 2*self.size // 3)
-        arc(self.screen, other.BLACK, mouth_rect, 0, math.pi, 3)
+        mouth_rect = (self.x - self.size // 3, self.y + self.size // 4, 2 * self.size // 3, 2 * self.size // 3)
+        arc(self.screen, BLACK, mouth_rect, 0, math.pi, 3)
 
-        circle(other.screen, other.BLACK, (self.x, self.y), self.size, 2)
+        circle(self.screen, BLACK, (self.x, self.y), self.size, 2)
 
-    def move(self, other: Game):
-        x_max = 9 * other.width / 10
+    def move(self, scr_width, scr_height):
+        """
+        Moves Emoji.
+
+        :param scr_width: screen's width.
+        :param scr_height: screen's height.
+        :return: None
+        """
+        x_max = 9 * scr_width / 10
         x_min = x_max - 5 * self.size
-        y_max = 8 * other.height // 10
+        y_max = 8 * scr_height // 10
         y_min = y_max - 5 * self.size
         if self.x - x_min <= 0:
             self.v_x = abs(self.v_x)
