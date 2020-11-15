@@ -61,6 +61,7 @@ class Game:
     def mainloop(self):
         finished = False
         mouse_down = False
+        key_down_event = None
         while not finished:
             self.clock.tick(self.FPS)
 
@@ -79,8 +80,14 @@ class Game:
                     self.cannon.shoot()
                     self.tries += 1
                     mouse_down = False
+                if event.type == pygame.KEYDOWN:
+                    key_down_event = event
+                elif event.type == pygame.KEYUP:
+                    key_down_event = None
             if mouse_down:
                 self.cannon.increase_muzzle()
+            if key_down_event is not None:
+                self.move_cannon(key_down_event)
 
             self.show_scores()
 
@@ -192,8 +199,23 @@ class Game:
                     )
                 )
 
+    def move_cannon(self, event):
+        """
+        Determines if arrow keys arrow keys are pressed.
+        and moves cannon.
+
+        :param event: pygame KEYDOWN event
+        :return: None
+        """
+        if event.key == pygame.K_LEFT:
+            self.cannon.move(left=True)
+        elif event.key == pygame.K_RIGHT:
+            self.cannon.move(left=False)
+
 
 class Cannon:
+    velocity = 5
+
     def __init__(self, screen, x, y, radius, color):
         """
         :param screen: pygame Surface object
@@ -268,6 +290,21 @@ class Cannon:
             20 * (self.width / self.r - 1)
         ))
         self.width = 2 * self.r
+
+    def move(self, left: bool):
+        """
+        Moves cannon.
+
+        :param left: True if left arrow, False if right
+        :return: None
+        """
+        screen_width = self.screen.get_size()[0]
+        if left:
+            if self.x > 0.1 * screen_width:
+                self.x -= int(self.velocity)
+        else:
+            if self.x < 0.4 * screen_width:
+                self.x += int(self.velocity)
 
 
 class Missile:
